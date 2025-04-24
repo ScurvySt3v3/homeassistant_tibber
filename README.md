@@ -6,6 +6,7 @@ Dieses Home Assistant Blueprint/Script automatisiert die Steuerung eines Zendure
 
 Das Skript trifft Entscheidungen, wann und wie der Zendure-Batteriespeicher betrieben werden soll:
 
+
 ⚡ Funktion der Automatisierung:
 
  - Grundlastentladung (0 - 8 Uhr): In den frühen Morgenstunden wird die Batterie verwendet, um die Grundlast des Haushalts zu decken. Die Batterie wird mit einer Leistung von 120 W entladen, um diese Grundlast zu versorgen.
@@ -17,6 +18,7 @@ Das Skript trifft Entscheidungen, wann und wie der Zendure-Batteriespeicher betr
  - Extrem günstige Zeiten (unter dem Minimum): Wenn der Strompreis sehr niedrig ist, wird Netzstrom verbraucht, da dieser günstig ist. Gleichzeitig wird überschüssiger Solarstrom in der Batterie gespeichert, um diesen für teurere Zeiten zu nutzen.
 
  - Leicht unter Durchschnitt, tagsüber: Wenn der Strompreis unter dem Durchschnitt liegt, wird während des Tages die Grundlast des Haushalts aus der Batterie gedeckt (mit einer Leistung von 120 W). Hierbei wird die Batterie leicht entladen, um die laufenden Haushaltskosten zu decken.
+
 
 🔋 Laden der Batterie:
 
