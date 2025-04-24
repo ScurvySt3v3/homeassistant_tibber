@@ -1,0 +1,88 @@
+alias: Dynamische Strompreissteuerung Zendure V2.0
+description: ""
+trigger:
+  - hours: /1
+    trigger: time_pattern
+  - entity_id:
+      - sensor.dynamischer_strompreis
+      - sensor.solar_eingangsleistung
+    trigger: state
+condition: []
+action:
+  - variables:
+      current: "{{ float(states('sensor.dynamischer_strompreis')) }}"
+      avg: >-
+        {{ float(state_attr('sensor.dynamischer_strompreis',
+        'avg_price')) }}
+      min: >-
+        {{ float(state_attr('sensor.dynamischer_strompreis',
+        'min_price')) }}
+      hour: "{{ now().hour }}"
+      pv_power: "{{ float(states('sensor.pv_leistung')) }}"
+      battery: "{{ float(states('sensor.batteriestand')) }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ hour >= 0 and hour < 8 and current < avg }}"
+        sequence:
+          - target:
+              entity_id: select.zendure_manager_operation
+            data:
+              option: manual
+            action: select.select_option
+          - target:
+              entity_id: number.zendure_manager_manual_power
+            data:
+              value: 120
+            action: number.set_value
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ hour >= 16 and hour <= 18 and pv_power > 170 and current >= avg
+              and battery > 80 }}
+        sequence:
+          - target:
+              entity_id: select.zendure_manager_operation
+            data:
+              option: manual
+            action: select.select_option
+          - target:
+              entity_id: number.zendure_manager_manual_power
+            data:
+              value: 120
+            action: number.set_value
+      - conditions:
+          - condition: template
+            value_template: "{{ current >= avg }}"
+        sequence:
+          - target:
+              entity_id: select.zendure_manager_operation
+            data:
+              option: smart
+            action: select.select_option
+      - conditions:
+          - condition: template
+            value_template: "{{ current < min * 1.05 }}"
+        sequence:
+          - target:
+              entity_id: select.zendure_manager_operation
+            data:
+              option: "off"
+            action: select.select_option
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ current >= min * 1.05 and current < avg and not (hour >= 0 and
+              hour < 8) }}
+        sequence:
+          - target:
+              entity_id: select.zendure_manager_operation
+            data:
+              option: manual
+            action: select.select_option
+          - target:
+              entity_id: number.zendure_manager_manual_power
+            data:
+              value: 120
+            action: number.set_value
+mode: single
