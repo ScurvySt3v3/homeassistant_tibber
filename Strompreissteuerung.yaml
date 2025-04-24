@@ -1,0 +1,149 @@
+blueprint:
+  name: Dynamische Strompreissteuerung Zendure
+  description: >
+    Automatisierung für den Zendure Akku auf Basis von PV-Ertrag, Strompreis und SOC.
+  domain: automation
+  input:
+    strompreis_sensor:
+      name: Strompreis Sensor
+      selector:
+        entity:
+          domain: sensor
+    strompreis_avg_attr:
+      name: Durchschnittspreis Attribut
+      default: avg_price
+    strompreis_min_attr:
+      name: Minimalpreis Attribut
+      default: min_price
+    pv_sensor:
+      name: PV-Leistung Sensor
+      selector:
+        entity:
+          domain: sensor
+    battery_sensor:
+      name: Akku SOC Sensor
+      selector:
+        entity:
+          domain: sensor
+    operation_mode_select:
+      name: Zendure Modus-Auswahl
+      selector:
+        entity:
+          domain: select
+    manual_power_number:
+      name: Zendure Manuelle Leistung
+      selector:
+        entity:
+          domain: number
+    abend_start:
+      name: Abendstart-Stunde
+      default: 16
+    abend_ende:
+      name: Abendende-Stunde
+      default: 18
+    abend_pv_threshold:
+      name: Mindest-PV-Leistung Abend (W)
+      default: 170
+    abend_battery_threshold:
+      name: Mindest-SOC Abend (%)
+      default: 80
+    nacht_leistung:
+      name: Leistung nachts (W)
+      default: 120
+
+trigger:
+  - platform: time_pattern
+    hours: "/1"
+  - platform: state
+    entity_id: !input strompreis_sensor
+
+variables:
+  current: "{{ float(states(input.strompreis_sensor)) }}"
+  avg: "{{ float(state_attr(input.strompreis_sensor, input.strompreis_avg_attr)) }}"
+  min: "{{ float(state_attr(input.strompreis_sensor, input.strompreis_min_attr)) }}"
+  hour: "{{ now().hour }}"
+  pv_power: "{{ float(states(input.pv_sensor)) }}"
+  battery: "{{ float(states(input.battery_sensor)) }}"
+  abend_start: !input abend_start
+  abend_ende: !input abend_ende
+  abend_pv_threshold: !input abend_pv_threshold
+  abend_battery_threshold: !input abend_battery_threshold
+  nacht_leistung: !input nacht_leistung
+
+action:
+  - choose:
+      # Nachtbetrieb
+      - conditions:
+          - condition: template
+            value_template: "{{ hour >= 0 and hour < 8 and current < avg }}"
+        sequence:
+          - service: select.select_option
+            target:
+              entity_id: !input operation_mode_select
+            data:
+              option: manual
+          - service: number.set_value
+            target:
+              entity_id: !input manual_power_number
+            data:
+              value: !input nacht_leistung
+
+      # Abendbetrieb mit Bedingungen
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ hour >= abend_start and hour <= abend_ende
+                 and pv_power > abend_pv_threshold
+                 and current >= avg
+                 and battery > abend_battery_threshold }}
+        sequence:
+          - service: select.select_option
+            target:
+              entity_id: !input operation_mode_select
+            data:
+              option: manual
+          - service: number.set_value
+            target:
+              entity_id: !input manual_power_number
+            data:
+              value: !input nacht_leistung
+
+      # Strompreis sehr hoch → smart
+      - conditions:
+          - condition: template
+            value_template: "{{ current >= avg }}"
+        sequence:
+          - service: select.select_option
+            target:
+              entity_id: !input operation_mode_select
+            data:
+              option: smart
+
+      # Strompreis sehr niedrig → aus
+      - conditions:
+          - condition: template
+            value_template: "{{ current < min * 1.05 }}"
+        sequence:
+          - service: select.select_option
+            target:
+              entity_id: !input operation_mode_select
+            data:
+              option: 'off'
+
+      # Mittelpreis tagsüber → manuell
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ current >= min * 1.05 and current < avg and not (hour >= 0 and hour < 8) }}
+        sequence:
+          - service: select.select_option
+            target:
+              entity_id: !input operation_mode_select
+            data:
+              option: manual
+          - service: number.set_value
+            target:
+              entity_id: !input manual_power_number
+            data:
+              value: !input nacht_leistung
+mode: single
